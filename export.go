@@ -7,23 +7,16 @@ import (
 func Init() *temp {
 	return &temp {
 		headers: nil,
-		middleware: func(h http.HandlerFunc) http.HandlerFunc {return h},
 		notfound: nil,
 		recovery: nil,
-		gets: make(map[string]http.HandlerFunc),
-		posts: make(map[string]http.HandlerFunc),
+		gets: nil,
+		posts: nil,
+		middleware: make(map[int]func(http.HandlerFunc) http.HandlerFunc),
 	}
 }
 
 func (x *temp) SetHeaders(y func(http.ResponseWriter)) {
 	x.headers = y
-}
-
-func (x *temp) AppendMiddleware(y func(http.HandlerFunc) http.HandlerFunc) {
-	a := x.middleware
-	x.middleware = func(b http.HandlerFunc) http.HandlerFunc {
-		return a(b)
-	}
 }
 
 func (x *temp) SetNotFound(y http.HandlerFunc) {
@@ -34,12 +27,22 @@ func (x *temp) SetRecovery(y http.HandlerFunc) {
 	x.recovery = y
 }
 
-func (x *temp) AddGet(y string, z http.HandlerFunc) {
-	x.gets[y] = z
+func (x *temp) AddMiddleware(y func(http.HandlerFunc) http.HandlerFunc) {
+	x.middleware[-1] = compose(x.middleware[-1], y)
 }
 
-func (x *temp) AddPost(y string, z http.HandlerFunc) {
-	x.posts[y] = z
+func (x *temp) AddGet(g uint8, y string, z http.HandlerFunc) {
+	x.gets = append(x.gets, route{group: g, path: y, handler: z})
+}
+
+func (x *temp) AddPost(g uint8, y string, z http.HandlerFunc) {
+	x.posts = append(x.posts, route{group: g, path: y, handler: z})
+}
+
+func (x *temp) AppendMiddleware(gs []uint, y func(http.HandlerFunc) http.HandlerFunc) {
+	for _, g := range gs {
+		x.middleware[int(g)] = compose(x.middleware[int(g)], y)
+	}
 }
 
 func (x *temp) Get() http.HandlerFunc {
@@ -47,10 +50,14 @@ func (x *temp) Get() http.HandlerFunc {
 		panic("Router unimplemented")
 	}
 
-	g := buildTrie(x.gets)
-	p := buildTrie(x.posts)
+	if x.middleware[-1] == nil {
+		x.middleware[-1] = func(h http.HandlerFunc) http.HandlerFunc {return h}
+	}
 
-	return x.middleware(func(w http.ResponseWriter, r *http.Request) {
+	a := buildTrie(x.gets, x.middleware)
+	b := buildTrie(x.posts, x.middleware)
+
+	return func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			err := recover()
 			if err != nil {
@@ -63,9 +70,9 @@ func (x *temp) Get() http.HandlerFunc {
 		var which *node
 		switch r.Method {
 			case http.MethodGet:
-				which = g
+				which = a
 			case http.MethodPost:
-				which = p
+				which = b
 			default:
 				x.notfound(w, r)
 				return
@@ -79,5 +86,5 @@ func (x *temp) Get() http.HandlerFunc {
 		}
 
 		handler(w, r)
-	})
+	}
 }
