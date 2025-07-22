@@ -4,13 +4,19 @@ import (
 	"net/http"
 )
 
+type route struct {
+	group		uint8
+	path		string
+	handler		http.HandlerFunc
+}
+
 type temp struct {
 	headers		func(http.ResponseWriter)
-	middleware	func(http.HandlerFunc) http.HandlerFunc
 	notfound	http.HandlerFunc
 	recovery	http.HandlerFunc
-	gets		map[string]http.HandlerFunc
-	posts		map[string]http.HandlerFunc
+	gets		[]route
+	posts		[]route
+	middleware	map[int]func(http.HandlerFunc) http.HandlerFunc
 }
 
 type node struct {
@@ -48,10 +54,18 @@ func (x *node) walk(parts []string) http.HandlerFunc {
 	return x.handler
 }
 
-func buildTrie(a map[string]http.HandlerFunc) *node {
+func buildTrie(a []route, mw map[int]func(http.HandlerFunc) http.HandlerFunc) *node {
 	trie := makeNode()
-	for b, c := range a {
-		trie.add(b, c)
+
+	for _, r := range a {
+		g := mw[-1]
+		m := mw[int(r.group)]
+		h := r.handler
+		if m != nil {
+			m = compose(g, m)
+		}
+		h = wrap(m, h)
+		trie.add(r.path, h)
 	}
 
 	return trie
