@@ -39,7 +39,7 @@ func (x *temp) AddPost(g uint8, y string, z http.HandlerFunc) {
 	x.posts = append(x.posts, route{group: g, path: y, handler: z})
 }
 
-func (x *temp) AppendMiddleware(gs []uint, y func(http.HandlerFunc) http.HandlerFunc) {
+func (x *temp) AppendMiddleware(gs []uint8, y func(http.HandlerFunc) http.HandlerFunc) {
 	for _, g := range gs {
 		x.middleware[int(g)] = compose(x.middleware[int(g)], y)
 	}
