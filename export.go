@@ -23,7 +23,7 @@ func (x *temp) SetNotFound(y http.HandlerFunc) {
 	x.notfound = y
 }
 
-func (x *temp) SetRecovery(y http.HandlerFunc) {
+func (x *temp) SetRecovery(y func(any, http.ResponseWriter, *http.Request)) {
 	x.recovery = y
 }
 
@@ -61,7 +61,7 @@ func (x *temp) Get() http.HandlerFunc {
 		defer func() {
 			err := recover()
 			if err != nil {
-				x.recovery(w, r)
+				x.recovery(err, w, r)
 			}
 		}()
 

@@ -13,7 +13,7 @@ type route struct {
 type temp struct {
 	headers		func(http.ResponseWriter)
 	notfound	http.HandlerFunc
-	recovery	http.HandlerFunc
+	recovery	func(any, http.ResponseWriter, *http.Request)
 	gets		[]route
 	posts		[]route
 	middleware	map[int]func(http.HandlerFunc) http.HandlerFunc
@@ -61,7 +61,9 @@ func buildTrie(a []route, mw map[int]func(http.HandlerFunc) http.HandlerFunc) *n
 		g := mw[-1]
 		m := mw[int(r.group)]
 		h := r.handler
-		if m != nil {
+		if m == nil {
+			m = g
+		} else {
 			m = compose(g, m)
 		}
 		h = wrap(m, h)

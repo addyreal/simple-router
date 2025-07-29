@@ -16,6 +16,9 @@ func compose(a, b func(http.HandlerFunc) http.HandlerFunc) func(http.HandlerFunc
 	if a == nil {
 		a = func(h http.HandlerFunc) http.HandlerFunc {return h}
 	}
+	if b == nil {
+		b = func(h http.HandlerFunc) http.HandlerFunc {return h}
+	}
 
 	return func(aC, bC func(http.HandlerFunc) http.HandlerFunc) func(http.HandlerFunc) http.HandlerFunc {
 		return func(h http.HandlerFunc) http.HandlerFunc {
@@ -25,6 +28,12 @@ func compose(a, b func(http.HandlerFunc) http.HandlerFunc) func(http.HandlerFunc
 }
 
 func wrap(a func(http.HandlerFunc) http.HandlerFunc, b http.HandlerFunc) http.HandlerFunc {
+	if a == nil {
+		a = func(h http.HandlerFunc) http.HandlerFunc {return h}
+	}
+	if b == nil {
+		panic("Wrapping a nil handler")
+	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		a(b)(w, r)
 	}

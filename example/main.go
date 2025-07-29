@@ -2,9 +2,10 @@ package main
 
 import (
 	"log"
+	"net/url"
+	"math/rand"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"github.com/addyreal/simple-router"
 )
 
@@ -15,8 +16,16 @@ func main() {
 	_notfound := func(w http.ResponseWriter, r *http.Request) {
 		log.Println("404")
 	}
-	_recovery := func(w http.ResponseWriter, r *http.Request) {
-		log.Println("Panic")
+	_recovery := func(err any, w http.ResponseWriter, r *http.Request) {
+		log.Println("Recovered")
+		switch v := err.(type) {
+			case string:
+				log.Println(err)
+			case error:
+				log.Println(v.Error())
+			default:
+				log.Println("becuase something bad happened")
+		}
 	}
 	_global := func(n http.HandlerFunc) http.HandlerFunc {
 		log.Println("Global")
@@ -34,8 +43,12 @@ func main() {
 		log.Println("Handling")
 	}
 	_badhandler := func(w http.ResponseWriter, r *http.Request) {
-		log.Println("I will panic")
-		panic("")
+		if rand.Intn(2) == 0 {
+			log.Println("I will panic")
+			panic("fatal error")
+		}
+
+		log.Println("I did not panic")
 	}
 
 
@@ -52,8 +65,8 @@ func main() {
 	b.AddMiddleware(_global)
 
 	b.AddGet(7, "hello", _handler)
-	b.AppendMiddleware([]uint{7}, _first)
-	b.AppendMiddleware([]uint{7}, _second)
+	b.AppendMiddleware([]uint8{7}, _first)
+	b.AppendMiddleware([]uint8{7}, _second)
 
 	b.AddGet(0, "/bad/ohno", _badhandler)
 
