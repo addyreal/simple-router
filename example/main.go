@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"context"
 	"net/url"
 	"math/rand"
 	"net/http"
@@ -10,6 +11,8 @@ import (
 )
 
 func main() {
+	type key string
+	const arbitrarykey key = "arbitrary"
 	_headers := func(w http.ResponseWriter) {
 		log.Println("Headers")
 	}
@@ -32,12 +35,24 @@ func main() {
 		return n
 	}
 	_first := func(n http.HandlerFunc) http.HandlerFunc {
-		log.Println("First")
-		return n
+		return func(w http.ResponseWriter, r *http.Request) {
+			log.Println("First")
+			val := 69
+			ctx := context.WithValue(r.Context(), arbitrarykey, val)
+			log.Println("I passed down", val)
+			n.ServeHTTP(w, r.WithContext(ctx))
+		}
 	}
 	_second := func(n http.HandlerFunc) http.HandlerFunc {
-		log.Println("Second")
-		return n
+		return func(w http.ResponseWriter, r *http.Request) {
+			log.Println("Second")
+			val := r.Context().Value(arbitrarykey)
+			if val == nil {
+				panic("error")
+			}
+			log.Println("I inherited", val.(int))
+			n.ServeHTTP(w, r)
+		}
 	}
 	_handler := func(w http.ResponseWriter, r *http.Request) {
 		log.Println("Handling")
@@ -50,7 +65,6 @@ func main() {
 
 		log.Println("I did not panic")
 	}
-
 
 	_requests := []*http.Request{
 		&http.Request{Method: "GET", URL: &url.URL{Path: "/ohno"}},
@@ -75,5 +89,6 @@ func main() {
 	for _, _req := range _requests {
 		log.Println("--- Requesting", _req.URL.Path)
 		router(httptest.NewRecorder(), _req)
+		log.Println("--- DONE")
 	}
 }

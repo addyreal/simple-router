@@ -22,7 +22,7 @@ func compose(a, b func(http.HandlerFunc) http.HandlerFunc) func(http.HandlerFunc
 
 	return func(aC, bC func(http.HandlerFunc) http.HandlerFunc) func(http.HandlerFunc) http.HandlerFunc {
 		return func(h http.HandlerFunc) http.HandlerFunc {
-			return bC(aC(h))
+			return aC(bC(h))
 		}
 	}(a, b)
 }
