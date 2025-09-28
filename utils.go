@@ -38,3 +38,11 @@ func wrap(a func(http.HandlerFunc) http.HandlerFunc, b http.HandlerFunc) http.Ha
 		a(b)(w, r)
 	}
 }
+
+type resrec struct {
+	http.ResponseWriter
+}
+
+func (rec *resrec) Write(b []byte) (int, error) {
+	return len(b), nil
+}

@@ -1,12 +1,14 @@
 package main
 
 import (
-	"log"
 	"context"
-	"net/url"
+	"log"
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
+	"net/http/httputil"
+	"net/url"
+
 	"github.com/addyreal/simple-router"
 )
 
@@ -17,10 +19,9 @@ func main() {
 		log.Println("Headers")
 	}
 	_notfound := func(w http.ResponseWriter, r *http.Request) {
-		log.Println("404")
+		http.Error(w, "missing", http.StatusNotFound)
 	}
 	_recovery := func(err any, w http.ResponseWriter, r *http.Request) {
-		log.Println("Recovered")
 		switch v := err.(type) {
 			case string:
 				log.Println(err)
@@ -29,6 +30,7 @@ func main() {
 			default:
 				log.Println("becuase something bad happened")
 		}
+		w.Write([]byte("I recovered"))
 	}
 	_global := func(n http.HandlerFunc) http.HandlerFunc {
 		log.Println("Global")
@@ -56,6 +58,8 @@ func main() {
 	}
 	_handler := func(w http.ResponseWriter, r *http.Request) {
 		log.Println("Handling")
+		w.Header().Set("Arbitrary", "header")
+		w.Write([]byte("hello"))
 	}
 	_badhandler := func(w http.ResponseWriter, r *http.Request) {
 		if rand.Intn(2) == 0 {
@@ -63,13 +67,15 @@ func main() {
 			panic("fatal error")
 		}
 
-		log.Println("I did not panic")
+		w.Write([]byte("I did not panic"))
 	}
 
 	_requests := []*http.Request{
 		&http.Request{Method: "GET", URL: &url.URL{Path: "/ohno"}},
 		&http.Request{Method: "GET", URL: &url.URL{Path: "/bad/ohno"}},
 		&http.Request{Method: "GET", URL: &url.URL{Path: "/hello"}},
+		&http.Request{Method: "GET", URL: &url.URL{Path: "/whoisthis"}},
+		&http.Request{Method: "HEAD", URL: &url.URL{Path: "/hello"}},
 	}
 
 	b := router.Init()
@@ -87,8 +93,11 @@ func main() {
 	router := b.Get()
 
 	for _, _req := range _requests {
-		log.Println("--- Requesting", _req.URL.Path)
-		router(httptest.NewRecorder(), _req)
+		log.Println("--- Requesting", _req.URL.Path, _req.Method)
+		rec := httptest.NewRecorder()
+		router(rec, _req)
+		dump, _ := httputil.DumpResponse(rec.Result(), true)
+		log.Println("- Response\n"+string(dump))
 		log.Println("--- DONE")
 	}
 }

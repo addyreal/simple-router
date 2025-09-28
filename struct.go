@@ -14,6 +14,7 @@ type temp struct {
 	headers		func(http.ResponseWriter)
 	notfound	http.HandlerFunc
 	recovery	func(any, http.ResponseWriter, *http.Request)
+	heads		[]route
 	gets		[]route
 	posts		[]route
 	middleware	map[int]func(http.HandlerFunc) http.HandlerFunc
