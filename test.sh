@@ -1,7 +1,11 @@
 #!/bin/bash
 
+DIR="$(dirname "${BASH_SOURCE[0]}")"
 TESTFILE="router_test.go"
-cd $(dirname "${BASH_SOURCE[0]}")
+[[ -w "$DIR" ]] || { echo "Error creating file $TESTFILE"; exit 1; }
+[[ -e $TESTFILE ]] && { echo "Error creating file $TESTFILE"; exit 1; }
+which go >/dev/null 2>&1 || { echo "Error invoking go"; exit 1; }
+cd "$DIR"
 tee $TESTFILE >/dev/null <<'EOF'
 package router
 
