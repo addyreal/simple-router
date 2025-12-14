@@ -1,103 +1,103 @@
 package router
 
 import (
+	"github.com/addyreal/simple-router/internal/head"
+	"github.com/addyreal/simple-router/internal/middleware"
+	"github.com/addyreal/simple-router/internal/route"
+	"github.com/addyreal/simple-router/internal/trie"
 	"net/http"
 )
 
-func HeadFromGet(x http.HandlerFunc) http.HandlerFunc {
+func HeadOnly(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		rec := &resrec{ResponseWriter: w}
-		x(rec, r)
+		w2 := &head.HeaderWriter{ResponseWriter: w}
+		h(w2, r)
 	}
 }
 
+type temp struct {
+	notfound   http.HandlerFunc
+	recovery   func(any, http.ResponseWriter, *http.Request)
+	routes     map[string]map[string]route.Route
+	middleware map[int]func(http.HandlerFunc) http.HandlerFunc
+}
+
 func Init() *temp {
-	return &temp {
-		headers: nil,
-		notfound: nil,
-		recovery: nil,
-		heads: nil,
-		gets: nil,
-		posts: nil,
+	return &temp{
+		notfound:   nil,
+		recovery:   nil,
+		routes:     make(map[string]map[string]route.Route),
 		middleware: make(map[int]func(http.HandlerFunc) http.HandlerFunc),
 	}
 }
 
-func (x *temp) SetHeaders(y func(http.ResponseWriter)) {
-	x.headers = y
+func (x *temp) SetNotFound(h http.HandlerFunc) {
+	x.notfound = h
 }
 
-func (x *temp) SetNotFound(y http.HandlerFunc) {
-	x.notfound = y
+func (x *temp) SetRecovery(h func(any, http.ResponseWriter, *http.Request)) {
+	x.recovery = h
 }
 
-func (x *temp) SetRecovery(y func(any, http.ResponseWriter, *http.Request)) {
-	x.recovery = y
+func (x *temp) AddMiddleware(m func(http.HandlerFunc) http.HandlerFunc) {
+	x.middleware[-1] = middleware.Compose(x.middleware[-1], m)
 }
 
-func (x *temp) AddMiddleware(y func(http.HandlerFunc) http.HandlerFunc) {
-	x.middleware[-1] = compose(x.middleware[-1], y)
-}
-
-func (x *temp) AddHead(g uint8, y string, z http.HandlerFunc) {
-	x.heads = append(x.heads, route{group: g, path: y, handler: z})
-}
-
-func (x *temp) AddGet(g uint8, y string, z http.HandlerFunc) {
-	x.gets = append(x.gets, route{group: g, path: y, handler: z})
-}
-
-func (x *temp) AddPost(g uint8, y string, z http.HandlerFunc) {
-	x.posts = append(x.posts, route{group: g, path: y, handler: z})
-}
-
-func (x *temp) AppendMiddleware(gs []uint8, y func(http.HandlerFunc) http.HandlerFunc) {
-	for _, g := range gs {
-		x.middleware[int(g)] = compose(x.middleware[int(g)], y)
+func (x *temp) AppendMiddleware(c int, m func(http.HandlerFunc) http.HandlerFunc) {
+	if c < 0 {
+		panic("Negative groups are reserved")
 	}
+	x.middleware[c] = middleware.Compose(x.middleware[c], m)
+}
+
+func (x *temp) Add(m string, c int, p string, h http.HandlerFunc) {
+	if c < 0 {
+		panic("Negative groups are reserved")
+	}
+	if x.routes[m] == nil {
+		x.routes[m] = make(map[string]route.Route)
+	}
+	x.routes[m][p] = route.Route{Class: c, Handler: h}
 }
 
 func (x *temp) Get() http.HandlerFunc {
-	if x.headers == nil || x.notfound == nil || x.recovery == nil {
+	if x.notfound == nil || x.recovery == nil {
 		panic("Router unimplemented")
 	}
-
 	if x.middleware[-1] == nil {
-		x.middleware[-1] = func(h http.HandlerFunc) http.HandlerFunc {return h}
+		x.middleware[-1] = middleware.Identity
 	}
 
-	a := buildTrie(x.heads, x.middleware)
-	b := buildTrie(x.gets, x.middleware)
-	c := buildTrie(x.posts, x.middleware)
-
+	tries := trie.BuildTries(x.routes, x.middleware)
 	return func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			err := recover()
 			if err != nil {
 				x.recovery(err, w, r)
+				return
 			}
 		}()
 
-		x.headers(w)
-
-		var which *node
-		switch r.Method {
-			case http.MethodHead:
-				which = a
-			case http.MethodGet:
-				which = b
-			case http.MethodPost:
-				which = c
-			default:
-				x.notfound(w, r)
-				return
+		arg := r.Method
+		if arg == "" {
+			arg = "GET"
 		}
 
-		parts := split(r.URL.Path)
-		handler := which.walk(parts)
+		tree, ok := tries[arg]
+		if ok == false {
+			if r.Method == http.MethodHead {
+				HeadOnly(x.notfound)(w, r)
+				return
+			} else {
+				x.notfound(w, r)
+				return
+			}
+		}
+
+		handler := tree.Walk(r.URL.Path)
 		if handler == nil {
 			if r.Method == http.MethodHead {
-				HeadFromGet(x.notfound).ServeHTTP(w, r)
+				HeadOnly(x.notfound)(w, r)
 				return
 			} else {
 				x.notfound(w, r)
